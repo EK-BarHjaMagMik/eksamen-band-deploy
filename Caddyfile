@@ -35,6 +35,17 @@ stugg.dk {
 		reverse_proxy backend:8080
 	}
 
+	# Photo files are served by the backend, not the frontend:
+	#   /sample-photos/*  → InitData seed images (backend static resources)
+	#   /uploads/*        → real uploaded photos (WebConfig, EKS-17)
+	# Without these, photo.url paths resolve to the frontend origin and 404.
+	handle /sample-photos/* {
+		reverse_proxy backend:8080
+	}
+	handle /uploads/* {
+		reverse_proxy backend:8080
+	}
+
 	# Everything else → the static frontend container (its own internal Caddy).
 	handle {
 		reverse_proxy frontend:80
