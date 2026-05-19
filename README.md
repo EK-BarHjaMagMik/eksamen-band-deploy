@@ -61,6 +61,64 @@ docker compose pull && docker compose up -d   # update to newest images
 docker compose down               # stop (data survives — named volumes)
 ```
 
+## Automated deploys (EKS-49)
+
+After the one-time setup above, every push to `main` in the backend or
+frontend repo builds a new image (EKS-48) and then automatically redeploys:
+
+```
+push main → build image → push to GHCR
+         → CI joins the tailnet → SSH to this server as `deploy`
+         → server runs the FORCED command /opt/stugg/deploy.sh
+            (pull → up -d → prune → wait for frontend health)
+```
+
+The CI key is locked so it can do **only** that one thing — see below.
+
+### Server-side setup (do once)
+
+1. **Dedicated deploy user (EKS-166)** — no sudo, only docker:
+   ```bash
+   sudo useradd --create-home --shell /bin/bash deploy
+   sudo usermod -aG docker deploy
+   sudo chown -R deploy:deploy /opt/stugg
+   ```
+2. **Deploy keypair (EKS-167)** — generate locally, *not* on the server:
+   ```bash
+   ssh-keygen -t ed25519 -f stugg-deploy -N "" -C "ci-deploy"
+   ```
+3. **Pin the key (EKS-168)** — append the **public** key to
+   `/home/deploy/.ssh/authorized_keys`, prefixed with a forced command so a
+   leaked key can only ever trigger a deploy:
+   ```
+   command="/opt/stugg/deploy.sh",no-port-forwarding,no-agent-forwarding,no-X11-forwarding,no-pty ssh-ed25519 AAAA...stugg-deploy.pub... ci-deploy
+   ```
+4. **GitHub Actions secrets (EKS-170)** — add to **both** repos
+   (Settings → Secrets and variables → Actions):
+   - `DEPLOY_SSH_KEY` — the **private** key from step 2
+   - `DEPLOY_HOST` — this server's Tailscale MagicDNS name (e.g. `stugg-server`)
+   - `DEPLOY_USER` — `deploy`
+   - `TS_OAUTH_CLIENT_ID` / `TS_OAUTH_SECRET` — a Tailscale OAuth client
+5. **Tailnet ACL** — define a `tag:ci` and grant it SSH to the server, and
+   give the OAuth client that tag. The CI runner joins as an ephemeral
+   `tag:ci` node, so SSH never touches the public internet.
+
+### Rollback (EKS-194)
+
+Images are tagged with the commit SHA as well as `latest`, so rolling back is
+pinning to a known-good SHA:
+
+```bash
+cd /opt/stugg
+# find the SHA you want from GHCR (Packages tab) or `docker images`
+echo "IMAGE_TAG=sha-<good-commit>" >> .env   # or edit the existing line
+docker compose pull && docker compose up -d
+```
+
+To undo, set `IMAGE_TAG=latest` again and pull. If a deploy fails the health
+gate, the previous containers keep running (`up -d` only replaces a service
+once its new container is created), so the site stays up while you roll back.
+
 ## Backups & restore (EKS-202 / EKS-203)
 
 `scripts/backup-db.sh` dumps the database and pushes it to a **dedicated**
