@@ -1,0 +1,81 @@
+# Stügg band site — server target state (EKS-50).
+# Lives on the server at /opt/stugg/ (cloned from the eksamen-band-deploy repo).
+# Compose gives this project its own isolated network + named volumes;
+# all secrets stay in a gitignored .env.
+#
+#   caddy     :80/:443  — the ONLY public service. TLS + routing.
+#   frontend  :80        — static site (image ships its own internal Caddy).
+#   backend   :8080      — Spring Boot API.
+#   mysql     :3306      — never published; reachable only inside this project.
+#
+# Dynamic DNS (stugg.dk tracks the dynamic home IP) is run as a separate
+# one-off container, not a service here — see README.
+
+services:
+  caddy:
+    image: caddy:2.8-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      ACME_EMAIL: ${ACME_EMAIL}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data        # issued certs — must persist across restarts
+      - caddy_config:/config
+    depends_on:
+      frontend:
+        condition: service_healthy
+      backend:
+        condition: service_started
+
+  frontend:
+    image: ${REGISTRY}/${FRONTEND_IMAGE}:${IMAGE_TAG}
+    restart: unless-stopped
+    expose:
+      - "80"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:80/healthz"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  backend:
+    image: ${REGISTRY}/${BACKEND_IMAGE}:${IMAGE_TAG}
+    restart: unless-stopped
+    env_file:
+      - .env          # passes any app secrets (JWT, etc.) into the container
+    environment:
+      # Shared DB_* vars — single source of truth, also used by mysql below.
+      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/${DB_NAME}?useSSL=false&allowPublicKeyRetrieval=true
+      SPRING_DATASOURCE_USERNAME: ${DB_USER}
+      SPRING_DATASOURCE_PASSWORD: ${DB_PASSWORD}
+    expose:
+      - "8080"
+    depends_on:
+      mysql:
+        condition: service_healthy
+
+  mysql:
+    image: mysql:8.4
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${DB_NAME}
+      MYSQL_USER: ${DB_USER}
+      MYSQL_PASSWORD: ${DB_PASSWORD}
+    volumes:
+      - mysql_data:/var/lib/mysql   # named volume — survives `compose down` (EKS-201)
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -uroot -p\"$$MYSQL_ROOT_PASSWORD\" --silent"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+volumes:
+  mysql_data:
+  caddy_data:
+  caddy_config:

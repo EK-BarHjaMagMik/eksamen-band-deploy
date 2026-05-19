@@ -1,0 +1,42 @@
+# Stügg band site — public reverse proxy (EKS-199/200).
+# Caddy is the edge here (NO cloudflared for this project). Auto-HTTPS via
+# Let's Encrypt HTTP-01 — issues once port-forward (80/443) + DNS are live.
+
+{
+	email {$ACME_EMAIL}
+}
+
+# Send www to the apex.
+www.stugg.dk {
+	redir https://stugg.dk{uri} permanent
+}
+
+stugg.dk {
+	encode zstd gzip
+
+	# Baseline security headers (EKS-200 hardening).
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		-Server
+	}
+
+	# API → backend. Path is preserved (controllers are mapped under /api).
+	# request_body cap is the native guard against upload abuse / oversized
+	# bodies. NOTE: the app must also raise Spring's multipart limits
+	# (spring.servlet.multipart.max-file-size/max-request-size) for EKS-17 —
+	# that's app config, out of scope for this deployment story.
+	handle /api/* {
+		request_body {
+			max_size 64MB
+		}
+		reverse_proxy backend:8080
+	}
+
+	# Everything else → the static frontend container (its own internal Caddy).
+	handle {
+		reverse_proxy frontend:80
+	}
+}

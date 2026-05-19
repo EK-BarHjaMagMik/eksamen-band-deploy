@@ -1,0 +1,11 @@
+# Secrets — server-side only, never committed (EKS-196)
+.env
+
+# Local backup artifacts
+*.sql
+*.sql.gz
+backups/
+
+# IDE / editor project files
+.idea/
+*.iml
