@@ -27,7 +27,8 @@ the public reverse proxy and terminates HTTPS via Let's Encrypt.
    cp .env.example .env && nano .env   # set DB passwords, ACME_EMAIL, etc.
    ```
 3. **Router** — forward external TCP **80 and 443** to this server's LAN IP
-   (`192.168.8.198`). Nothing else is forwarded; SSH stays off the internet.
+   (`<server-LAN-IP>`, e.g. `192.168.x.x`). Nothing else is forwarded; SSH
+   stays off the internet.
 4. **DNS** — point `stugg.dk` (and `www`) at the connection's public IP.
    Because the IP is dynamic, move the zone to Cloudflare (DNS-only / grey
    cloud), create a scoped `Zone:DNS:Edit` token, put it in `.env` as
