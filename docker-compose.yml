@@ -46,12 +46,13 @@ services:
     image: ${REGISTRY}/${BACKEND_IMAGE}:${IMAGE_TAG}
     restart: unless-stopped
     env_file:
-      - .env          # passes any app secrets (JWT, etc.) into the container
+      - .env          # passes JWT_SECRET (and any other secrets) into the container
     environment:
-      # Shared DB_* vars — single source of truth, also used by mysql below.
-      SPRING_DATASOURCE_URL: jdbc:mysql://mysql:3306/${DB_NAME}?useSSL=false&allowPublicKeyRetrieval=true
-      SPRING_DATASOURCE_USERNAME: ${DB_USER}
-      SPRING_DATASOURCE_PASSWORD: ${DB_PASSWORD}
+      # Names match application.properties (DATABASE_*) and the Kino precedent.
+      # Shared DB_* vars = single source of truth, also used by mysql below.
+      DATABASE_URL: jdbc:mysql://mysql:3306/${DB_NAME}?useSSL=false&allowPublicKeyRetrieval=true
+      DATABASE_USERNAME: ${DB_USER}
+      DATABASE_PASSWORD: ${DB_PASSWORD}
     expose:
       - "8080"
     depends_on:
