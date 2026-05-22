@@ -11,10 +11,17 @@
 # Dynamic DNS (stugg.dk tracks the dynamic home IP) is run as a separate
 # one-off container, not a service here — see README.
 
+# Watchtower runs in the docker-apps project but mounts the Docker socket,
+# so it sees every container on the host regardless of compose project.
+# This label opts the whole stügg stack out of its auto-updates.
+x-watchtower-ignore: &watchtower-ignore
+  com.centurylinklabs.watchtower.enable: "false"
+
 services:
   caddy:
     image: caddy:2.8-alpine
     restart: unless-stopped
+    labels: *watchtower-ignore
     ports:
       - "80:80"
       - "443:443"
@@ -33,6 +40,7 @@ services:
   frontend:
     image: ${REGISTRY}/${FRONTEND_IMAGE}:${IMAGE_TAG}
     restart: unless-stopped
+    labels: *watchtower-ignore
     expose:
       - "80"
     healthcheck:
@@ -45,6 +53,7 @@ services:
   backend:
     image: ${REGISTRY}/${BACKEND_IMAGE}:${IMAGE_TAG}
     restart: unless-stopped
+    labels: *watchtower-ignore
     env_file:
       - .env          # passes JWT_SECRET (and any other secrets) into the container
     environment:
@@ -62,6 +71,7 @@ services:
   mysql:
     image: mysql:8.4
     restart: unless-stopped
+    labels: *watchtower-ignore
     environment:
       MYSQL_ROOT_PASSWORD: ${DB_ROOT_PASSWORD}
       MYSQL_DATABASE: ${DB_NAME}
