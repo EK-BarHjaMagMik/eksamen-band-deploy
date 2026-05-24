@@ -62,8 +62,11 @@ services:
       DATABASE_URL: jdbc:mysql://mysql:3306/${DB_NAME}?useSSL=false&allowPublicKeyRetrieval=true
       DATABASE_USERNAME: ${DB_USER}
       DATABASE_PASSWORD: ${DB_PASSWORD}
+      UPLOAD_DIR: /var/lib/stugg/uploads
     expose:
       - "8080"
+    volumes:
+      - stugg_uploads:/var/lib/stugg/uploads
     depends_on:
       mysql:
         condition: service_healthy
@@ -88,5 +91,6 @@ services:
 
 volumes:
   mysql_data:
+  stugg_uploads:
   caddy_data:
   caddy_config:
